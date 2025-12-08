@@ -67,6 +67,16 @@ async function run() {
       res.send(result);
     })
 
+    // my-lessons
+    app.get('/my-lessons/:email', async (req, res) => {
+      const email = req.params.email;
+      // authorEmail:"user@b.com"
+      const query = { authorEmail: email };
+
+      const result = await lessonsCollection.find(query).toArray();
+      res.send(result);
+    })
+
 
 
 
