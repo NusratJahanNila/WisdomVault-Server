@@ -67,6 +67,13 @@ async function run() {
       const result = await lessonsCollection.find().toArray();
       res.send(result);
     })
+    //Lesson details:  get a single lesson from db
+    app.get('/lesson-details/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await lessonsCollection.findOne(query);
+      res.send(result);
+    })
 
     // my-lessons
     app.get('/my-lessons/:email', async (req, res) => {
@@ -119,8 +126,8 @@ async function run() {
     app.post('/user', async (req, res) => {
       const userData = req.body;
       // add some extra info
-      userData.isPremium= false;
-      userData.lessonCount=0;
+      userData.isPremium = false;
+      userData.lessonCount = 0;
       userData.created_at = new Date().toISOString();
       userData.last_loggedIn = new Date().toISOString();
       userData.role = 'user'
@@ -129,7 +136,6 @@ async function run() {
 
       //find if the user already exist or not
       const alreadyExists = await usersCollection.findOne(query);
-      console.log('user already exist--> ', !!alreadyExists)
 
       // if exist--> update
       if (alreadyExists) {
@@ -170,12 +176,22 @@ async function run() {
     // update role: manage user
     app.patch('/update-role', verifyJWT, async (req, res) => {
       const { email, role } = req.body;
+      console.log(email, role)
       const update = {
         $set: { role }
       }
       // update role in the user collection
       const result = await usersCollection.updateOne({ email }, update)
       res.send(result)
+    })
+
+    // useRole hook: get a user's role by email
+    app.get('/user/role', verifyJWT, async (req, res) => {
+      const result = await usersCollection.findOne({ email: req.tokenEmail })
+      res.send({
+        role: result?.role,
+        isPremium: result?.isPremium
+      })
     })
 
 
