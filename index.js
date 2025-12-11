@@ -56,8 +56,20 @@ async function run() {
     // add lesson
     app.post('/lessons', async (req, res) => {
       const lessonData = req.body;
-      // console.log(lessonData);
+      // get author's lesson count
+      const user = await usersCollection.findOne(
+        { email: lessonData.authorEmail },
+        { projection: { lessonCount: 1 } }
+      );
+      const currentCount = user?.lessonCount || 0;
+      lessonData.authorLessonCount = currentCount + 1;
 
+      // update lesson count in the userCollection
+      const userQuery = { email: lessonData.authorEmail };
+      const update = { $inc: { lessonCount: 1 } };
+      await usersCollection.updateOne(userQuery, update);
+
+      //update in the lesson collection too
       const result = await lessonsCollection.insertOne(lessonData)
       res.send(result);
     })
