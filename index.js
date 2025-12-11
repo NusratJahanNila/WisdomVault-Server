@@ -194,6 +194,44 @@ async function run() {
       })
     })
 
+    // -------------------------------------------------------------
+    // Author 
+    //  Get author info
+    app.get('/author/:email', async (req, res) => {
+      const { email } = req.params;
+
+      const author = await usersCollection.findOne(
+        { email },
+        { projection: { password: 0, _id: 0 } }
+      );
+
+      if (!author) {
+        return res.status(404).send({});
+      }
+
+      res.send({
+        name: author.name || author.displayName, // support both
+        email: author.email,
+        photoURL: author.image || author.photoURL, // FIXED
+        isPremium: author.isPremium || false
+      });
+    });
+
+
+
+    //  author's public lessons
+    app.get('/lessons/author/:email', async (req, res) => {
+      const { email } = req.params;
+
+      const lessons = await lessonsCollection.find({
+        authorEmail: email,
+        privacy: "public"
+      }).toArray();
+
+      res.send(lessons);
+    });
+
+
 
 
 
