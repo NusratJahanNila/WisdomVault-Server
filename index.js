@@ -56,6 +56,7 @@ async function run() {
     // add lesson
     app.post('/lessons', async (req, res) => {
       const lessonData = req.body;
+      lessonData.likes=[];
       // get author's lesson count
       const user = await usersCollection.findOne(
         { email: lessonData.authorEmail },
@@ -86,6 +87,49 @@ async function run() {
       const result = await lessonsCollection.findOne(query);
       res.send(result);
     })
+
+    // Lesson details: like
+    // Toggle like
+    app.post('/lesson/:id/like', verifyJWT, async (req, res) => {
+      const lessonId = req.params.id;
+       const userEmail = req.body.userId;
+
+      const lesson = await lessonsCollection.findOne({ _id: new ObjectId(lessonId) });
+
+      // Check if already liked
+      const alreadyLiked = lesson.likes.includes(userEmail);
+
+      if (alreadyLiked) {
+        await lessonsCollection.updateOne(
+          { _id: new ObjectId(lessonId) },
+          {
+            $pull: { likes: userEmail },
+            $inc: { likesCount: -1 }
+          }
+        );
+      } 
+      else {
+        await lessonsCollection.updateOne(
+          { _id: new ObjectId(lessonId) },
+          {
+            $push: { likes: userEmail },
+            $inc: { likesCount: 1 }
+          }
+        );
+      }
+
+      // Get updated count
+      const updatedLesson = await lessonsCollection.findOne(
+        { _id: new ObjectId(lessonId) },
+        { projection: { likesCount: 1, likes: 1 } }
+      );
+
+      res.send({
+        success: true,
+        likesCount: updatedLesson.likesCount,
+        userLiked: !alreadyLiked
+      });
+    });
 
     // my-lessons
     app.get('/my-lessons/:email', async (req, res) => {
