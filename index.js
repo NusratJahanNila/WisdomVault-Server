@@ -52,6 +52,7 @@ async function run() {
     const db = client.db('lessonsDB')
     const lessonsCollection = db.collection('lessons')
     const usersCollection = db.collection('users')
+    const favoritesCollection = db.collection('favorites')
 
     // add lesson
     app.post('/lessons', async (req, res) => {
@@ -89,19 +90,18 @@ async function run() {
     })
 
     // Lesson details: like
-    // Toggle like
     app.post('/lesson/:id/like', verifyJWT, async (req, res) => {
-      const lessonId = req.params.id;
+      const id = req.params.id;
        const userEmail = req.body.userId;
 
-      const lesson = await lessonsCollection.findOne({ _id: new ObjectId(lessonId) });
+      const lesson = await lessonsCollection.findOne({ _id: new ObjectId(id) });
 
       // Check if already liked
       const alreadyLiked = lesson.likes.includes(userEmail);
 
       if (alreadyLiked) {
         await lessonsCollection.updateOne(
-          { _id: new ObjectId(lessonId) },
+          { _id: new ObjectId(id) },
           {
             $pull: { likes: userEmail },
             $inc: { likesCount: -1 }
@@ -110,22 +110,20 @@ async function run() {
       } 
       else {
         await lessonsCollection.updateOne(
-          { _id: new ObjectId(lessonId) },
+          { _id: new ObjectId(id) },
           {
             $push: { likes: userEmail },
             $inc: { likesCount: 1 }
           }
         );
       }
-
       // Get updated count
       const updatedLesson = await lessonsCollection.findOne(
-        { _id: new ObjectId(lessonId) },
+        { _id: new ObjectId(id) },
         { projection: { likesCount: 1, likes: 1 } }
       );
 
       res.send({
-        success: true,
         likesCount: updatedLesson.likesCount,
         userLiked: !alreadyLiked
       });
@@ -179,7 +177,7 @@ async function run() {
 
     // ---------------------------------------------
     // Manage-users role: save or update user in db
-    app.post('/user', async (req, res) => {
+    app.post('/user',verifyJWT, async (req, res) => {
       const userData = req.body;
       // add some extra info
       userData.isPremium = false;
@@ -272,9 +270,6 @@ async function run() {
         isPremium: author.isPremium || false
       });
     });
-
-
-
     //  author's public lessons
     app.get('/lessons/author/:email', async (req, res) => {
       const { email } = req.params;
@@ -286,6 +281,15 @@ async function run() {
 
       res.send(lessons);
     });
+
+    // --------------------------------------------------------------------
+    // favorites
+    app.post('/favorites', async(req,res)=>{
+      const favoritesData=req.body;
+      console.log(favoritesData)
+      const result=await favoritesCollection.insertOne(favoritesData)
+      res.send(result);
+    })
 
 
 
