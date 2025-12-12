@@ -305,16 +305,16 @@ async function run() {
           { _id: new ObjectId(lessonId) },
           { $inc: { favoritesCount: -1 } }
         );
-      } 
+      }
       else {
         // if not,add
         await favoritesCollection.insertOne({
           lessonId: lessonId,
           userEmail: userEmail,
-          title:title, 
-          accessLevel:accessLevel, 
-          category:category, 
-          emotionalTone:emotionalTone,
+          title: title,
+          accessLevel: accessLevel,
+          category: category,
+          emotionalTone: emotionalTone,
           saved_at: new Date().toISOString()
         });
 
@@ -333,9 +333,42 @@ async function run() {
       res.send({
         success: true,
         favoritesCount: favoritesCount,
-        userFavorited: !existing 
+        userFavorited: !existing
       });
     });
+
+    // my favorites
+    app.get('/favorites/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { userEmail: email };
+
+      const result = await favoritesCollection.find(query).toArray();
+      res.send(result);
+    })
+
+    // delete my fav
+    app.delete('/my-favorites/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      
+      //get lesson id
+      const favorite = await favoritesCollection.findOne(query);
+      if (!favorite) {
+        return res.status(404).send({ 
+          message: 'Favorite not found' 
+        });
+      }
+      const lessonId = favorite.lessonId;
+      // delete
+      const result = await favoritesCollection.deleteOne(query);
+      // update lesson
+      await lessonsCollection.updateOne(
+        { _id: new ObjectId(lessonId) },
+        { $inc: { favoritesCount: -1 } }
+      );
+
+      res.send(result)
+    })
 
 
 
