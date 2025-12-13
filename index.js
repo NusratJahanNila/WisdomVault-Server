@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const admin = require('firebase-admin')
 const port = process.env.PORT || 3000
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString(
@@ -16,7 +17,7 @@ const app = express()
 // middleware
 app.use(
   cors({
-    origin: [[process.env.CLIENT_DOMAIN]],
+    origin: process.env.CLIENT_DOMAIN,
     credentials: true,
     optionSuccessStatus: 200,
   })
@@ -459,8 +460,6 @@ async function run() {
 
       res.send(result);
     });
-
-
     // get all report lesson
     app.get('/reports', async (req, res) => {
       const result = await reportsCollection.find().toArray();
@@ -486,7 +485,6 @@ async function run() {
 
       res.send({ success: true, result });
     });
-
     // ignore
     app.patch('/reports/ignore/:lessonId', async (req, res) => {
       const lessonId = req.params.lessonId;
@@ -496,6 +494,42 @@ async function run() {
       res.send({ success: true, message: "Report ignored & removed", result });
     });
 
+    // ------------------------------------------------------------------------------------------
+    // Payments endpoints
+    app.post('/create-checkout-session', async (req, res) => {
+      const paymentInfo = req.body;
+      console.log(paymentInfo);
+
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: "WisdomVault Premium"
+              },
+              unit_amount: paymentInfo?.price *100 ,
+            },
+            quantity: 1,
+          },
+        ],
+        customer_email: paymentInfo?.userEmail,
+        // extra info
+        metadata: {
+          userEmail: paymentInfo?.userEmail,
+          userName: paymentInfo?.userName,
+        },
+        mode: 'payment',
+        // if payment success
+        success_url: `${process.env.CLIENT_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        // if payment cancel
+        cancel_url: `${process.env.CLIENT_DOMAIN}/payment`
+      })
+
+      res.send({
+        url: session.url
+      })
+    })
 
 
 
