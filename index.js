@@ -131,6 +131,31 @@ async function run() {
       });
     });
 
+    // Similar lesson
+    app.get('/lessons/similar', async (req, res) => {
+      const { category, emotionalTone, lessonId } = req.query;
+
+      if (!category && !emotionalTone) {
+        return res.send([]);
+      }
+
+      const query = {
+        _id: { $ne: new ObjectId(lessonId) },
+        privacy: 'public',
+        $or: [
+          { category: category },
+          { emotionalTone: emotionalTone }
+        ]
+      };
+
+      const result = await lessonsCollection
+        .find(query)
+        .limit(6)
+        .toArray();
+
+      res.send(result);
+    });
+
     // my-lessons
     app.get('/my-lessons/:email', async (req, res) => {
       const email = req.params.email;
