@@ -59,10 +59,37 @@ async function run() {
     const paymentsCollection = db.collection('payments')
 
     // add lesson
+    // app.post('/lessons', async (req, res) => {
+    //   const lessonData = req.body;
+    //   lessonData.likes = [];
+    //   // get author's lesson count
+    //   const user = await usersCollection.findOne(
+    //     { email: lessonData.authorEmail },
+    //     { projection: { lessonCount: 1 } }
+    //   );
+    //   const currentCount = user?.lessonCount || 0;
+    //   lessonData.authorLessonCount = currentCount + 1;
+
+    //   // update lesson count in the userCollection
+    //   const userQuery = { email: lessonData.authorEmail };
+    //   const update = { $inc: { lessonCount: 1 } };
+    //   await usersCollection.updateOne(userQuery, update);
+
+    //   //update in the lesson collection too
+    //   const result = await lessonsCollection.insertOne(lessonData)
+    //   res.send(result);
+    // })
+
+
+    // Add isFeatured field to new lessons
     app.post('/lessons', async (req, res) => {
       const lessonData = req.body;
+
+      // manage lesson
       lessonData.likes = [];
-      // get author's lesson count
+      lessonData.isFeatured = false;
+      lessonData.isReviewed = false;
+
       const user = await usersCollection.findOne(
         { email: lessonData.authorEmail },
         { projection: { lessonCount: 1 } }
@@ -70,15 +97,14 @@ async function run() {
       const currentCount = user?.lessonCount || 0;
       lessonData.authorLessonCount = currentCount + 1;
 
-      // update lesson count in the userCollection
       const userQuery = { email: lessonData.authorEmail };
       const update = { $inc: { lessonCount: 1 } };
       await usersCollection.updateOne(userQuery, update);
 
-      //update in the lesson collection too
       const result = await lessonsCollection.insertOne(lessonData)
       res.send(result);
-    })
+    });
+
     // All lesson:
     // get all lessons from db
     app.get('/lessons', async (req, res) => {
@@ -203,10 +229,54 @@ async function run() {
       const result = await lessonsCollection.updateOne(query, update)
       res.send(result)
     })
+//------------------------------------------------------------
+// manage lessons
+    // home-featured lesson
+    app.get('/lessons/featured', async (req, res) => {
+      const featuredLessons = await lessonsCollection.find({
+          isFeatured: true,
+          privacy: 'public'
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(featuredLessons);
+    });
+
+    // featured status
+    app.patch('/lesson/:id/feature', verifyJWT, async (req, res) => {
+        const lessonId = req.params.id;
+        const { isFeatured } = req.body;
+
+        const result = await lessonsCollection.updateOne(
+          { _id: new ObjectId(lessonId) },
+          { $set: { isFeatured: isFeatured } }
+        );
+
+        res.send({
+          success: true,
+          modifiedCount: result.modifiedCount
+        });
+    });
+
+    // reviewed
+    app.patch('/lesson/:id/reviewed', verifyJWT, async (req, res) => {
+        const lessonId = req.params.id;
+
+        const result = await lessonsCollection.updateOne(
+          { _id: new ObjectId(lessonId) },
+          { $set: { isReviewed: true, reviewedAt: new Date() } }
+        );
+
+        res.send({
+          success: true,
+          modifiedCount: result.modifiedCount
+        });
+    });
 
     // ---------------------------------------------
     // Manage-users role: save or update user in db
-    app.post('/user', verifyJWT, async (req, res) => {
+    app.post('/user', async (req, res) => {
       const userData = req.body;
       // add some extra info
       userData.isPremium = false;
