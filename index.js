@@ -229,14 +229,14 @@ async function run() {
       const result = await lessonsCollection.updateOne(query, update)
       res.send(result)
     })
-//------------------------------------------------------------
-// manage lessons
+    //------------------------------------------------------------
+    // manage lessons
     // home-featured lesson
     app.get('/lessons/featured', async (req, res) => {
       const featuredLessons = await lessonsCollection.find({
-          isFeatured: true,
-          privacy: 'public'
-        })
+        isFeatured: true,
+        privacy: 'public'
+      })
         .sort({ createdAt: -1 })
         .toArray();
 
@@ -245,33 +245,33 @@ async function run() {
 
     // featured status
     app.patch('/lesson/:id/feature', verifyJWT, async (req, res) => {
-        const lessonId = req.params.id;
-        const { isFeatured } = req.body;
+      const lessonId = req.params.id;
+      const { isFeatured } = req.body;
 
-        const result = await lessonsCollection.updateOne(
-          { _id: new ObjectId(lessonId) },
-          { $set: { isFeatured: isFeatured } }
-        );
+      const result = await lessonsCollection.updateOne(
+        { _id: new ObjectId(lessonId) },
+        { $set: { isFeatured: isFeatured } }
+      );
 
-        res.send({
-          success: true,
-          modifiedCount: result.modifiedCount
-        });
+      res.send({
+        success: true,
+        modifiedCount: result.modifiedCount
+      });
     });
 
     // reviewed
     app.patch('/lesson/:id/reviewed', verifyJWT, async (req, res) => {
-        const lessonId = req.params.id;
+      const lessonId = req.params.id;
 
-        const result = await lessonsCollection.updateOne(
-          { _id: new ObjectId(lessonId) },
-          { $set: { isReviewed: true, reviewedAt: new Date() } }
-        );
+      const result = await lessonsCollection.updateOne(
+        { _id: new ObjectId(lessonId) },
+        { $set: { isReviewed: true, reviewedAt: new Date() } }
+      );
 
-        res.send({
-          success: true,
-          modifiedCount: result.modifiedCount
-        });
+      res.send({
+        success: true,
+        modifiedCount: result.modifiedCount
+      });
     });
 
     // ---------------------------------------------
@@ -293,13 +293,24 @@ async function run() {
       // if exist--> update
       if (alreadyExists) {
         console.log('updating user info-->')
+
+        // update
         const update = {
           $set: {
-            last_loggedIn: new Date().toISOString
+            last_loggedIn: new Date().toISOString(),
+            update_at: new Date().toISOString(),
           }
         }
-        const result = await usersCollection.updateOne(query, update)
+        // update name and img
+        if (userData.name) {
+          update.$set.name = userData.name;
+        }
+        if (userData.image) {
+          update.$set.image = userData.image;
+        }
 
+
+        const result = await usersCollection.updateOne(query, update)
         return res.send(result)
       }
 
