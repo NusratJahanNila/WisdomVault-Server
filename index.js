@@ -59,29 +59,6 @@ async function run() {
     const paymentsCollection = db.collection('payments')
 
     // add lesson
-    // app.post('/lessons', async (req, res) => {
-    //   const lessonData = req.body;
-    //   lessonData.likes = [];
-    //   // get author's lesson count
-    //   const user = await usersCollection.findOne(
-    //     { email: lessonData.authorEmail },
-    //     { projection: { lessonCount: 1 } }
-    //   );
-    //   const currentCount = user?.lessonCount || 0;
-    //   lessonData.authorLessonCount = currentCount + 1;
-
-    //   // update lesson count in the userCollection
-    //   const userQuery = { email: lessonData.authorEmail };
-    //   const update = { $inc: { lessonCount: 1 } };
-    //   await usersCollection.updateOne(userQuery, update);
-
-    //   //update in the lesson collection too
-    //   const result = await lessonsCollection.insertOne(lessonData)
-    //   res.send(result);
-    // })
-
-
-    // Add isFeatured field to new lessons
     app.post('/lessons', async (req, res) => {
       const lessonData = req.body;
 
@@ -109,16 +86,16 @@ async function run() {
     // get all lessons from db
     // get all lessons with search, filter, sort, pagination
     app.get('/lessons', async (req, res) => {
-      const {limit = 0,skip = 0,category,emotionalTone,sortBy,search} = req.query;
+      const { limit = 0, skip = 0, category, emotionalTone, sortBy, search } = req.query;
 
       const query = {};
 
-      // Filter by category
+      // category
       if (category && category !== 'all') {
         query.category = category;
       }
 
-      // Filter by emotional tone
+      // emotional tone
       if (emotionalTone && emotionalTone !== 'all') {
         query.emotionalTone = emotionalTone;
       }
@@ -146,7 +123,19 @@ async function run() {
         .skip(Number(skip))
         .toArray();
 
-      res.send({ result, total });
+      let stats = null;
+      if (admin === 'true') {
+        const allLessons = await lessonsCollection.find({}).toArray();
+
+        stats = {
+          total: allLessons.length,
+          public: allLessons.filter(l => l.privacy === 'public').length,
+          private: allLessons.filter(l => l.privacy === 'private').length,
+          featured: allLessons.filter(l => l.isFeatured).length,
+          categories: [...new Set(allLessons.map(l => l.category))],
+        };
+      }
+      res.send({ result, total, stats });
     });
 
     //Lesson details:  get a single lesson from db
@@ -311,6 +300,37 @@ async function run() {
         modifiedCount: result.modifiedCount
       });
     });
+
+    // ------------------------------------------------
+    // extra section
+    app.get('/top-contributors', async (req, res) => {
+      const contributors = await usersCollection
+        .find({ role: 'user' })
+        .sort({ lessonCount: -1 }) // most lessons first
+        .limit(3)
+        .project({
+          name: 1,
+          email: 1,
+          image: 1,
+          lessonCount: 1
+        })
+        .toArray();
+
+      res.send(contributors);
+    });
+
+
+    // most saved
+    app.get('/most-saved-lessons', async (req, res) => {
+      const result = await lessonsCollection
+        .find({ privacy: 'public' })
+        .sort({ favoritesCount: -1 })
+        .limit(6)
+        .toArray();
+
+      res.send(result);
+    })
+
 
     // ---------------------------------------------
     // Manage-users role: save or update user in db
