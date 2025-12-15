@@ -107,10 +107,48 @@ async function run() {
 
     // All lesson:
     // get all lessons from db
+    // get all lessons with search, filter, sort, pagination
     app.get('/lessons', async (req, res) => {
-      const result = await lessonsCollection.find().toArray();
-      res.send(result);
-    })
+      const {limit = 0,skip = 0,category,emotionalTone,sortBy,search} = req.query;
+
+      const query = {};
+
+      // Filter by category
+      if (category && category !== 'all') {
+        query.category = category;
+      }
+
+      // Filter by emotional tone
+      if (emotionalTone && emotionalTone !== 'all') {
+        query.emotionalTone = emotionalTone;
+      }
+
+      // Search by title / keyword
+      if (search) {
+        query.title = { $regex: search, $options: 'i' };
+      }
+
+      // Sorting
+      let sortOption = {};
+      if (sortBy === 'newest') {
+        sortOption = { createdAt: -1 };
+      }
+      if (sortBy === 'mostSaved') {
+        sortOption = { favoritesCount: -1 };
+      }
+
+      const total = await lessonsCollection.countDocuments(query);
+
+      const result = await lessonsCollection
+        .find(query)
+        .sort(sortOption)
+        .limit(Number(limit))
+        .skip(Number(skip))
+        .toArray();
+
+      res.send({ result, total });
+    });
+
     //Lesson details:  get a single lesson from db
     app.get('/lesson-details/:id', async (req, res) => {
       const id = req.params.id;
