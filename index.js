@@ -163,8 +163,8 @@ async function run() {
         // Send response
         res.send({
           success: true,
-          result:finalResult,
-          total:finalResult.length,
+          result: finalResult,
+          total: finalResult.length,
           stats  // This will be null for non-admin
         });
 
@@ -284,7 +284,17 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }
 
+      const lesson = await lessonsCollection.findOne(query);
+
+      if (!lesson) {
+        return res.status(404).send({ error: 'Lesson not found' });
+      }
       const result = await lessonsCollection.deleteOne(query);
+
+      await usersCollection.updateOne(
+        { email: lesson.authorEmail },
+        { $inc: { lessonCount: -1 } }
+      );
       res.send(result)
     })
 
