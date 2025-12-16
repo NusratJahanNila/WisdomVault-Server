@@ -83,59 +83,95 @@ async function run() {
     });
 
     // All lesson:
-    // get all lessons from db
     // get all lessons with search, filter, sort, pagination
     app.get('/lessons', async (req, res) => {
-      const { limit = 0, skip = 0, category, emotionalTone, sortBy, search } = req.query;
+      try {
+        const { limit = 0, skip = 0, category, emotionalTone, sortBy, search, admin, reportedOnly } = req.query;
 
-      const query = {};
+        const query = {};
 
-      // category
-      if (category && category !== 'all') {
-        query.category = category;
+        //show ALL lessons (public + private)
+        if (admin !== 'true') {
+          query.privacy = 'public';
+        }
+
+        // Category filter
+        if (category && category !== 'all') {
+          query.category = category;
+        }
+
+        // Emotional tone filter
+        if (emotionalTone && emotionalTone !== 'all') {
+          query.emotionalTone = emotionalTone;
+        }
+
+        // Search by title
+        if (search) {
+          query.title = { $regex: search, $options: 'i' };
+        }
+
+        // Sorting
+        let sortOption = {};
+        if (sortBy === 'newest') {
+          sortOption = { createdAt: -1 };
+        } else if (sortBy === 'mostSaved') {
+          sortOption = { favoritesCount: -1 };
+        } else if (sortBy === 'title') {
+          sortOption = { title: 1 };
+        }
+
+        // Get total count for current query
+        const total = await lessonsCollection.countDocuments(query);
+
+        // Get lessons
+        const result = await lessonsCollection
+          .find(query)
+          .sort(sortOption)
+          .limit(Number(limit))
+          .skip(Number(skip))
+          .toArray();
+
+        // report
+        let finalResult = result;
+        if (reportedOnly === 'true') {
+          const reports = await reportsCollection.find({}).toArray();
+          const reportedLessonIds = reports.map(r => r.lessonId);
+
+          finalResult = result.filter(lesson =>
+            reportedLessonIds.includes(lesson._id.toString())
+          );
+        }
+
+        // ONLY calculate stats when admin requests
+        let stats = null;
+        if (admin === 'true') {
+          // Get ALL lessons for stats
+          const allLessons = await lessonsCollection.find({}).toArray();
+
+          // Get reports for reported count
+          const reports = await reportsCollection.find({}).toArray();
+          const reportedLessonIds = [...new Set(reports.map(r => r.lessonId))]; // Unique lesson IDs
+
+          stats = {
+            total: allLessons.length,
+            public: allLessons.filter(l => l.privacy === 'public').length,
+            private: allLessons.filter(l => l.privacy === 'private').length,
+            reported: reportedLessonIds.length  // Count unique reported lessons
+          };
+        }
+
+        // Send response
+        res.send({
+          success: true,
+          result:finalResult,
+          total:finalResult.length,
+          stats  // This will be null for non-admin
+        });
+
+      } catch (error) {
+        console.error('Error fetching lessons:', error);
+        res.status(500).send({ error: 'Server error' });
       }
-
-      // emotional tone
-      if (emotionalTone && emotionalTone !== 'all') {
-        query.emotionalTone = emotionalTone;
-      }
-
-      // Search by title / keyword
-      if (search) {
-        query.title = { $regex: search, $options: 'i' };
-      }
-
-      // Sorting
-      let sortOption = {};
-      if (sortBy === 'newest') {
-        sortOption = { createdAt: -1 };
-      }
-      if (sortBy === 'mostSaved') {
-        sortOption = { favoritesCount: -1 };
-      }
-
-      const total = await lessonsCollection.countDocuments(query);
-
-      const result = await lessonsCollection
-        .find(query)
-        .sort(sortOption)
-        .limit(Number(limit))
-        .skip(Number(skip))
-        .toArray();
-
-      let stats = null;
-      if (admin === 'true') {
-        const allLessons = await lessonsCollection.find({}).toArray();
-
-        stats = {
-          total: allLessons.length,
-          public: allLessons.filter(l => l.privacy === 'public').length,
-          private: allLessons.filter(l => l.privacy === 'private').length,
-          featured: allLessons.filter(l => l.isFeatured).length,
-          categories: [...new Set(allLessons.map(l => l.category))],
-        };
-      }
-      res.send({ result, total, stats });
     });
 
     //Lesson details:  get a single lesson from db
@@ -220,7 +256,29 @@ async function run() {
       const result = await lessonsCollection.find(query).toArray();
       res.send(result);
     })
+    // privacy to my-lesson
+    app.patch('/lesson/:id/privacy', async (req, res) => {
+      const { privacy } = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const update = {
+        $set: { privacy }
+      }
+      const result = await lessonsCollection.updateOne(query, update);
 
+      res.send(result);
+    });
+    //access level my-lesson
+    app.patch('/lesson/:id/access', async (req, res) => {
+      const { accessLevel } = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const update = {
+        $set: { accessLevel }
+      }
+      const result = await lessonsCollection.updateOne(query, update);
+      res.send(result);
+    });
     // delete my lesson
     app.delete('/my-lesson/:id', async (req, res) => {
       const id = req.params.id;
@@ -292,7 +350,12 @@ async function run() {
 
       const result = await lessonsCollection.updateOne(
         { _id: new ObjectId(lessonId) },
-        { $set: { isReviewed: true, reviewedAt: new Date() } }
+        {
+          $set: {
+            isReviewed: true,
+            reviewedAt: new Date(),
+          }
+        }
       );
 
       res.send({
@@ -318,8 +381,6 @@ async function run() {
 
       res.send(contributors);
     });
-
-
     // most saved
     app.get('/most-saved-lessons', async (req, res) => {
       const result = await lessonsCollection
