@@ -58,6 +58,16 @@ async function run() {
     const reportsCollection = db.collection('reports')
     const paymentsCollection = db.collection('payments')
 
+     // Role-based middleware
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.tokenEmail;
+      const user = await usersCollection.findOne({ email })
+      if ( user?.role !== 'admin') {
+        return res.status(403).send({ message: "Admin only Actions!", role: user?.role })
+      }
+    }
+
+    // ---------------------------------------------------
     // add lesson
     app.post('/lessons', async (req, res) => {
       const lessonData = req.body;
@@ -156,7 +166,7 @@ async function run() {
             total: allLessons.length,
             public: allLessons.filter(l => l.privacy === 'public').length,
             private: allLessons.filter(l => l.privacy === 'private').length,
-            reported: reportedLessonIds.length  // Count unique reported lessons
+            reported: reportedLessonIds.length  
           };
         }
 
@@ -164,8 +174,8 @@ async function run() {
         res.send({
           success: true,
           result: finalResult,
-          total: finalResult.length,
-          stats  // This will be null for non-admin
+          total: total,
+          stats 
         });
 
       } catch (error) {
@@ -297,9 +307,8 @@ async function run() {
       );
       res.send(result)
     })
-
     // update my lesson
-    app.patch('/my-lesson/:id', async (req, res) => {
+    app.patch('/my-lesson/:id',verifyJWT, async (req, res) => {
       const { title, description, category, emotionalTone, privacy, accessLevel, image } = req.body;
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }
@@ -327,7 +336,7 @@ async function run() {
     //------------------------------------------------------------
     // manage lessons
     // home-featured lesson
-    app.get('/lessons/featured', async (req, res) => {
+    app.get('/lessons/featured',verifyJWT, async (req, res) => {
       const featuredLessons = await lessonsCollection.find({
         isFeatured: true,
         privacy: 'public'
@@ -339,7 +348,7 @@ async function run() {
     });
 
     // featured status
-    app.patch('/lesson/:id/feature', verifyJWT, async (req, res) => {
+    app.patch('/lesson/:id/feature',verifyJWT,verifyAdmin, async (req, res) => {
       const lessonId = req.params.id;
       const { isFeatured } = req.body;
 
@@ -355,7 +364,7 @@ async function run() {
     });
 
     // reviewed
-    app.patch('/lesson/:id/reviewed', verifyJWT, async (req, res) => {
+    app.patch('/lesson/:id/reviewed', verifyJWT,verifyAdmin, async (req, res) => {
       const lessonId = req.params.id;
 
       const result = await lessonsCollection.updateOne(
@@ -459,7 +468,7 @@ async function run() {
     })
 
     // delete user: manage user
-    app.delete('/users/:email', async (req, res) => {
+    app.delete('/users/:email',verifyJWT,verifyAdmin, async (req, res) => {
       const email = req.params.email;
       const query = { email }
 
@@ -467,7 +476,7 @@ async function run() {
       res.send(result)
     })
     // update role: manage user
-    app.patch('/update-role', verifyJWT, async (req, res) => {
+    app.patch('/update-role', verifyJWT,verifyAdmin, async (req, res) => {
       const { email, role } = req.body;
       console.log(email, role)
       const update = {
@@ -523,7 +532,7 @@ async function run() {
 
     // --------------------------------------------------------------------
     // favorites
-    app.post('/lesson/:id/favorite', verifyJWT, async (req, res) => {
+    app.post('/lesson/:id/favorite', async (req, res) => {
 
       const { lessonId, userEmail, title, accessLevel, category, emotionalTone } = req.body;
 
@@ -577,7 +586,7 @@ async function run() {
     });
 
     // my favorites
-    app.get('/favorites/:email', verifyJWT, async (req, res) => {
+    app.get('/favorites/:email', async (req, res) => {
       const email = req.params.email;
       const query = { userEmail: email };
 
@@ -586,7 +595,7 @@ async function run() {
     })
 
     // delete my fav
-    app.delete('/my-favorites/:id', verifyJWT, async (req, res) => {
+    app.delete('/my-favorites/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }
 
@@ -672,12 +681,12 @@ async function run() {
       res.send(result);
     });
     // get all report lesson
-    app.get('/reports', async (req, res) => {
+    app.get('/reports',verifyJWT, async (req, res) => {
       const result = await reportsCollection.find().toArray();
       res.send(result);
     });
     // get 1 report lesson details
-    app.get('/reports/:lessonId', async (req, res) => {
+    app.get('/reports/:lessonId',verifyJWT,verifyAdmin, async (req, res) => {
       const lessonId = req.params.lessonId;
 
       const result = await reportsCollection.findOne({ lessonId });
@@ -687,7 +696,7 @@ async function run() {
       res.send(result);
     });
     // delete report lesson
-    app.delete('/reports/:lessonId', async (req, res) => {
+    app.delete('/reports/:lessonId',verifyJWT,verifyAdmin, async (req, res) => {
       const lessonId = req.params.lessonId;
 
       await lessonsCollection.deleteOne({ _id: new ObjectId(lessonId) });
@@ -697,7 +706,7 @@ async function run() {
       res.send({ success: true, result });
     });
     // ignore
-    app.patch('/reports/ignore/:lessonId', async (req, res) => {
+    app.patch('/reports/ignore/:lessonId',verifyJWT,verifyAdmin, async (req, res) => {
       const lessonId = req.params.lessonId;
 
       const result = await reportsCollection.deleteOne({ lessonId });
